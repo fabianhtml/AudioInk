@@ -42,18 +42,19 @@ impl WhisperEngine {
         samples: &[f32],
         language: &Language,
         audio_info: Option<AudioInfo>,
-        on_progress: Option<Box<dyn Fn(f32, String) + Send + Sync>>,
+        on_progress: Option<Box<dyn Fn(f32, String, Option<String>) + Send + Sync>>,
     ) -> AudioInkResult<TranscriptionResult> {
         self.transcribe_with_timestamps(samples, language, audio_info, on_progress, false)
     }
 
     /// Transcribe audio with optional timestamps
+    /// on_progress callback receives (progress: f32, message: String, chunk_text: Option<String>)
     pub fn transcribe_with_timestamps(
         &self,
         samples: &[f32],
         language: &Language,
         audio_info: Option<AudioInfo>,
-        on_progress: Option<Box<dyn Fn(f32, String) + Send + Sync>>,
+        on_progress: Option<Box<dyn Fn(f32, String, Option<String>) + Send + Sync>>,
         include_timestamps: bool,
     ) -> AudioInkResult<TranscriptionResult> {
         let start_time = Instant::now();
@@ -63,9 +64,14 @@ impl WhisperEngine {
             return self.transcribe_chunked_with_timestamps(samples, language, audio_info, on_progress, include_timestamps);
         }
 
-        // Transcripción directa para archivos cortos
-        let text = self.transcribe_segment_with_options(samples, language, on_progress.as_ref(), include_timestamps, 0)?;
+        // Transcripción directa para archivos cortos (no chunked, so no progressive callback needed)
+        let text = self.transcribe_segment_with_options(samples, language, None, include_timestamps, 0)?;
         let detected_language = self.detect_language_from_samples(samples)?;
+
+        // Emit the complete text for short files
+        if let Some(ref callback) = on_progress {
+            callback(1.0, "Transcription completed".to_string(), Some(text.clone()));
+        }
 
         let processing_time = start_time.elapsed().as_secs_f64();
 
@@ -83,7 +89,7 @@ impl WhisperEngine {
         samples: &[f32],
         language: &Language,
         audio_info: Option<AudioInfo>,
-        on_progress: Option<Box<dyn Fn(f32, String) + Send + Sync>>,
+        on_progress: Option<Box<dyn Fn(f32, String, Option<String>) + Send + Sync>>,
         include_timestamps: bool,
     ) -> AudioInkResult<TranscriptionResult> {
         use crate::models::CHUNK_DURATION_SECS;
@@ -108,19 +114,22 @@ impl WhisperEngine {
                 let progress = (i as f32 + 0.5) / total_chunks as f32;
                 callback(
                     progress,
-                    format!("Procesando chunk {} de {}", i + 1, total_chunks),
+                    format!("Transcribing chunk {} of {}", i + 1, total_chunks),
+                    None,
                 );
             }
 
             let time_offset_ms = (i as i64) * chunk_duration_ms;
             let text = self.transcribe_segment_with_options(chunk, language, None, include_timestamps, time_offset_ms)?;
-            transcriptions.push(text);
+            transcriptions.push(text.clone());
 
+            // Emit progress with the chunk text for progressive display
             if let Some(ref callback) = on_progress {
                 let progress = (i + 1) as f32 / total_chunks as f32;
                 callback(
                     progress,
-                    format!("Chunk {} de {} completado", i + 1, total_chunks),
+                    format!("Chunk {} of {} completed", i + 1, total_chunks),
+                    Some(text),
                 );
             }
         }

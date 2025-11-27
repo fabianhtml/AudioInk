@@ -164,15 +164,16 @@ pub async fn transcribe_file(
 
     // Transcribir
     let app_clone = app.clone();
-    let on_progress = Box::new(move |progress: f32, message: String| {
-        let _ = app_clone.emit(
-            "transcription-progress",
-            serde_json::json!({
-                "type": "progress",
-                "progress": 0.2 + progress * 0.8,
-                "message": message
-            }),
-        );
+    let on_progress = Box::new(move |progress: f32, message: String, chunk_text: Option<String>| {
+        let mut payload = serde_json::json!({
+            "type": "progress",
+            "progress": 0.2 + progress * 0.8,
+            "message": message
+        });
+        if let Some(text) = chunk_text {
+            payload["chunk_text"] = serde_json::json!(text);
+        }
+        let _ = app_clone.emit("transcription-progress", payload);
     });
 
     let include_timestamps = options.include_timestamps;
@@ -313,15 +314,16 @@ pub async fn transcribe_youtube(
 
     // Transcribe
     let app_clone = app.clone();
-    let on_progress = Box::new(move |progress: f32, message: String| {
-        let _ = app_clone.emit(
-            "transcription-progress",
-            serde_json::json!({
-                "type": "progress",
-                "progress": 0.3 + progress * 0.7,
-                "message": message
-            }),
-        );
+    let on_progress = Box::new(move |progress: f32, message: String, chunk_text: Option<String>| {
+        let mut payload = serde_json::json!({
+            "type": "progress",
+            "progress": 0.3 + progress * 0.7,
+            "message": message
+        });
+        if let Some(text) = chunk_text {
+            payload["chunk_text"] = serde_json::json!(text);
+        }
+        let _ = app_clone.emit("transcription-progress", payload);
     });
 
     let include_timestamps = options.include_timestamps;

@@ -583,6 +583,11 @@ async function transcribe() {
     elements.results.classList.add('hidden');
     elements.progressFill.style.width = '0%';
 
+    // Reset progressive transcription state
+    progressiveText = '';
+    includeTimestampsForProgressive = elements.includeTimestamps.checked;
+    elements.transcriptionText.value = '';
+
     try {
         let result;
 
@@ -799,6 +804,10 @@ async function clearAllHistory() {
     }
 }
 
+// Progressive transcription text accumulator
+let progressiveText = '';
+let includeTimestampsForProgressive = false;
+
 // Tauri event listeners
 function setupTauriListeners() {
     listen('transcription-progress', (event) => {
@@ -808,6 +817,20 @@ function setupTauriListeners() {
         }
         if (data.message) {
             elements.progressText.textContent = data.message;
+        }
+        // Handle progressive transcription - show text as chunks complete
+        if (data.chunk_text) {
+            const separator = includeTimestampsForProgressive ? '\n' : ' ';
+            if (progressiveText) {
+                progressiveText += separator + data.chunk_text;
+            } else {
+                progressiveText = data.chunk_text;
+            }
+            // Show results section and update text progressively
+            elements.results.classList.remove('hidden');
+            elements.transcriptionText.value = progressiveText;
+            // Auto-scroll to bottom
+            elements.transcriptionText.scrollTop = elements.transcriptionText.scrollHeight;
         }
     });
 
