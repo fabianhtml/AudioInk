@@ -25,6 +25,9 @@ let youtubeState = {
     captionLanguages: []
 };
 
+// yt-dlp availability
+let ytdlpAvailable = false;
+
 // History expanded state
 let expandedHistoryId = null;
 
@@ -58,8 +61,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     initEventListeners();
     applySettings();
     await checkModelStatus();
+    await checkYtdlpAvailable();
     await loadHistory();
 });
+
+// Check if yt-dlp is available
+async function checkYtdlpAvailable() {
+    try {
+        ytdlpAvailable = await invoke('check_ytdlp_available');
+    } catch (error) {
+        console.error('Error checking yt-dlp:', error);
+        ytdlpAvailable = false;
+    }
+}
 
 function applySettings() {
     const settings = loadSettings();
@@ -324,6 +338,15 @@ async function checkYoutubeVideo() {
             elements.captionsStatus.style.color = 'var(--warning)';
         }
 
+        // Handle Whisper button based on yt-dlp availability
+        if (ytdlpAvailable) {
+            elements.useWhisper.disabled = false;
+            elements.useWhisper.querySelector('.option-desc').textContent = 'More accurate, processes audio locally';
+        } else {
+            elements.useWhisper.disabled = true;
+            elements.useWhisper.querySelector('.option-desc').textContent = 'Requires yt-dlp: brew install yt-dlp';
+        }
+
     } catch (error) {
         console.error('Error checking YouTube video:', error);
         youtubeState.videoId = videoId;
@@ -336,7 +359,14 @@ async function checkYoutubeVideo() {
         elements.youtubeOptions.classList.remove('hidden');
         elements.youtubeInputSection.classList.add('hidden');
         elements.useYoutubeCaptions.disabled = true;
-        elements.captionsStatus.textContent = 'Could not check captions. You can still use Whisper.';
+
+        if (ytdlpAvailable) {
+            elements.captionsStatus.textContent = 'Could not check captions. You can still use Whisper.';
+            elements.useWhisper.disabled = false;
+        } else {
+            elements.captionsStatus.textContent = 'Could not check captions. Install yt-dlp to use Whisper.';
+            elements.useWhisper.disabled = true;
+        }
         elements.captionsStatus.style.color = 'var(--warning)';
     } finally {
         elements.loadYoutubeBtn.textContent = 'Check';
@@ -570,7 +600,8 @@ async function transcribe() {
                     url: youtubeState.url,
                     options: {
                         model: elements.modelSelect.value,
-                        language: elements.languageSelect.value
+                        language: elements.languageSelect.value,
+                        include_timestamps: elements.includeTimestamps.checked
                     }
                 });
             }

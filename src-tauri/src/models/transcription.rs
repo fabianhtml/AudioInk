@@ -40,8 +40,10 @@ pub enum SourceType {
     Whisper,
     /// Subtítulos extraídos de YouTube
     YoutubeSubtitles,
-    /// Transcripción con Whisper desde audio de YouTube
+    /// Transcripción con Whisper desde audio de YouTube (legacy)
     Youtube,
+    /// Transcripción con Whisper desde audio de YouTube (usando yt-dlp)
+    YoutubeWhisper,
 }
 
 impl std::fmt::Display for SourceType {
@@ -50,6 +52,7 @@ impl std::fmt::Display for SourceType {
             SourceType::Whisper => write!(f, "whisper"),
             SourceType::YoutubeSubtitles => write!(f, "youtube_subtitles"),
             SourceType::Youtube => write!(f, "youtube"),
+            SourceType::YoutubeWhisper => write!(f, "youtube_whisper"),
         }
     }
 }

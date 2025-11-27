@@ -1,4 +1,4 @@
-use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine};
+use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available};
 use crate::models::{Language, SourceType, TranscriptionEntry, TranscriptionResult, WhisperModel};
 use crate::persistence::HistoryManager;
 use crate::utils::AudioInkError;
@@ -220,19 +220,152 @@ pub async fn transcribe_file(
     Ok(result)
 }
 
+/// Check if yt-dlp is available
+#[tauri::command]
+pub fn check_ytdlp_available() -> bool {
+    is_ytdlp_available()
+}
+
 /// Transcribe audio from a YouTube URL using Whisper
-/// Note: This feature is not yet implemented. Use YouTube Captions instead.
 #[tauri::command]
 pub async fn transcribe_youtube(
-    _app: AppHandle,
-    _state: State<'_, AppState>,
+    app: AppHandle,
+    state: State<'_, AppState>,
     url: String,
-    _options: TranscribeOptions,
+    options: TranscribeOptions,
 ) -> Result<TranscriptionResult, String> {
-    Err(format!(
-        "Whisper transcription for YouTube is not yet available. URL: {}. Please use 'YouTube Captions' option instead.",
-        url
-    ))
+    // Check if yt-dlp is available
+    if !is_ytdlp_available() {
+        return Err("yt-dlp is not installed. Please install it with: brew install yt-dlp".to_string());
+    }
+
+    // Parsear opciones
+    let model = parse_model(&options.model)?;
+    let language = parse_language(&options.language);
+
+    // Verificar que el modelo está descargado
+    if !is_model_downloaded(&model) {
+        return Err(format!(
+            "El modelo '{}' no está descargado. Por favor, descárgalo primero.",
+            model
+        ));
+    }
+
+    // Emitir evento de inicio
+    let _ = app.emit(
+        "transcription-progress",
+        serde_json::json!({
+            "type": "started",
+            "message": "Downloading audio from YouTube..."
+        }),
+    );
+
+    let _ = app.emit(
+        "transcription-progress",
+        serde_json::json!({
+            "type": "progress",
+            "progress": 0.05,
+            "message": "Downloading audio from YouTube..."
+        }),
+    );
+
+    // Download audio from YouTube
+    let url_clone = url.clone();
+    let download_result = tokio::task::spawn_blocking(move || {
+        download_youtube_audio(&url_clone)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+    .map_err(|e| e.to_string())?;
+
+    let audio_path = download_result.audio_path.clone();
+    let video_title = download_result.title.clone();
+
+    // Decode audio
+    let _ = app.emit(
+        "transcription-progress",
+        serde_json::json!({
+            "type": "progress",
+            "progress": 0.2,
+            "message": "Decoding audio..."
+        }),
+    );
+
+    let audio_path_clone = audio_path.clone();
+    let (samples, audio_info) = tokio::task::spawn_blocking(move || {
+        decode_audio_to_whisper_format(&audio_path_clone)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+    .map_err(|e| e.to_string())?;
+
+    // Create/get Whisper engine
+    let _ = app.emit(
+        "transcription-progress",
+        serde_json::json!({
+            "type": "progress",
+            "progress": 0.3,
+            "message": "Loading Whisper model..."
+        }),
+    );
+
+    state.get_or_create_engine(&model).map_err(|e| e.to_string())?;
+
+    // Transcribe
+    let app_clone = app.clone();
+    let on_progress = Box::new(move |progress: f32, message: String| {
+        let _ = app_clone.emit(
+            "transcription-progress",
+            serde_json::json!({
+                "type": "progress",
+                "progress": 0.3 + progress * 0.7,
+                "message": message
+            }),
+        );
+    });
+
+    let include_timestamps = options.include_timestamps;
+    let result = {
+        let guard = state.current_engine.lock().map_err(|e| e.to_string())?;
+        if let Some((_, engine)) = guard.as_ref() {
+            engine.transcribe_with_timestamps(&samples, &language, Some(audio_info), Some(on_progress), include_timestamps)
+                .map_err(|e| e.to_string())?
+        } else {
+            // Clean up before returning error
+            cleanup_youtube_audio(&audio_path);
+            return Err("Whisper engine not initialized".to_string());
+        }
+    };
+
+    // Save to history
+    let entry = TranscriptionEntry::new(
+        video_title,
+        SourceType::YoutubeWhisper,
+        result.text.clone(),
+        result.audio_info.clone(),
+        result.processing_time,
+        result.language.clone(),
+    );
+
+    state
+        .history_manager
+        .save_transcription(entry)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Clean up downloaded file
+    cleanup_youtube_audio(&audio_path);
+
+    // Emit completed event
+    let _ = app.emit(
+        "transcription-progress",
+        serde_json::json!({
+            "type": "completed",
+            "message": "Transcription completed"
+        }),
+    );
+
+    Ok(result)
 }
 
 /// Obtiene los idiomas disponibles

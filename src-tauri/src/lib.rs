@@ -8,6 +8,7 @@ use commands::{
     // Transcription commands
     transcribe_file,
     transcribe_youtube,
+    check_ytdlp_available,
     get_languages,
     get_supported_formats,
     AppState,
@@ -40,6 +41,7 @@ pub fn run() {
             // Transcription
             transcribe_file,
             transcribe_youtube,
+            check_ytdlp_available,
             get_languages,
             get_supported_formats,
             // History
