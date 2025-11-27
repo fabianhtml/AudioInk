@@ -1,4 +1,4 @@
-use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available};
+use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available, apply_audio_speedup, cleanup_speedup_file};
 use crate::models::{Language, SourceType, TranscriptionEntry, TranscriptionResult, WhisperModel};
 use crate::persistence::HistoryManager;
 use crate::utils::AudioInkError;
@@ -53,6 +53,13 @@ pub struct TranscribeOptions {
     pub language: String,
     #[serde(default)]
     pub include_timestamps: bool,
+    /// Audio speed factor (1.0 = normal, 1.5 = 1.5x faster, max 2.0)
+    #[serde(default = "default_speed")]
+    pub speed: f32,
+}
+
+fn default_speed() -> f32 {
+    1.0
 }
 
 impl Default for TranscribeOptions {
@@ -61,6 +68,7 @@ impl Default for TranscribeOptions {
             model: "base".to_string(),
             language: "auto".to_string(),
             include_timestamps: false,
+            speed: 1.0,
         }
     }
 }
@@ -96,6 +104,34 @@ fn parse_language(name: &str) -> Language {
     }
 }
 
+/// Adjust timestamps in text by multiplying them by the speed factor
+/// Timestamps are in format [HH:MM:SS]
+fn adjust_timestamps_in_text(text: &str, speed: f32) -> String {
+    use regex::Regex;
+
+    let re = Regex::new(r"\[(\d{2}):(\d{2}):(\d{2})\]").unwrap();
+
+    re.replace_all(text, |caps: &regex::Captures| {
+        let hours: i64 = caps[1].parse().unwrap_or(0);
+        let minutes: i64 = caps[2].parse().unwrap_or(0);
+        let seconds: i64 = caps[3].parse().unwrap_or(0);
+
+        // Convert to total milliseconds
+        let total_ms = (hours * 3600 + minutes * 60 + seconds) * 1000;
+
+        // Apply speed factor
+        let adjusted_ms = ((total_ms as f64) * (speed as f64)).round() as i64;
+
+        // Convert back to HH:MM:SS
+        let total_secs = adjusted_ms / 1000;
+        let h = total_secs / 3600;
+        let m = (total_secs % 3600) / 60;
+        let s = total_secs % 60;
+
+        format!("[{:02}:{:02}:{:02}]", h, m, s)
+    }).to_string()
+}
+
 /// Transcribe un archivo de audio local
 #[tauri::command]
 pub async fn transcribe_file(
@@ -114,6 +150,7 @@ pub async fn transcribe_file(
     // Parsear opciones
     let model = parse_model(&options.model)?;
     let language = parse_language(&options.language);
+    let speed = options.speed.clamp(1.0, 2.0); // Limit to safe range
 
     // Verificar que el modelo está descargado
     if !is_model_downloaded(&model) {
@@ -132,6 +169,33 @@ pub async fn transcribe_file(
         }),
     );
 
+    // Apply speedup if needed
+    let mut speedup_path: Option<std::path::PathBuf> = None;
+    let audio_path = if speed > 1.01 {
+        let _ = app.emit(
+            "transcription-progress",
+            serde_json::json!({
+                "type": "progress",
+                "progress": 0.05,
+                "message": format!("Acelerando audio a {}x...", speed)
+            }),
+        );
+
+        let path_for_speedup = path.clone();
+        let speed_factor = speed;
+        let sped_up_path = tokio::task::spawn_blocking(move || {
+            apply_audio_speedup(&path_for_speedup, speed_factor)
+        })
+        .await
+        .map_err(|e| format!("Error de task: {}", e))?
+        .map_err(|e| e.to_string())?;
+
+        speedup_path = Some(sped_up_path.clone());
+        sped_up_path
+    } else {
+        path.clone()
+    };
+
     // Decodificar audio
     let _ = app.emit(
         "transcription-progress",
@@ -142,13 +206,25 @@ pub async fn transcribe_file(
         }),
     );
 
-    let path_clone = path.clone();
-    let (samples, audio_info) = tokio::task::spawn_blocking(move || {
-        decode_audio_to_whisper_format(&path_clone)
+    let (samples, mut audio_info) = tokio::task::spawn_blocking(move || {
+        decode_audio_to_whisper_format(&audio_path)
     })
     .await
     .map_err(|e| format!("Error de task: {}", e))?
     .map_err(|e| e.to_string())?;
+
+    // Adjust audio_info duration for speedup (show original duration)
+    if speed > 1.01 {
+        if let Some(ref mut info) = Some(&mut audio_info) {
+            info.duration *= speed as f64;
+            info.duration_str = crate::models::AudioInfo::format_duration(info.duration);
+        }
+    }
+
+    // Clean up speedup temp file
+    if let Some(ref temp_path) = speedup_path {
+        cleanup_speedup_file(temp_path);
+    }
 
     // Crear/obtener motor Whisper
     let _ = app.emit(
@@ -177,7 +253,7 @@ pub async fn transcribe_file(
     });
 
     let include_timestamps = options.include_timestamps;
-    let result = {
+    let mut result = {
         let guard = state.current_engine.lock().map_err(|e| e.to_string())?;
         if let Some((_, engine)) = guard.as_ref() {
             engine.transcribe_with_timestamps(&samples, &language, Some(audio_info), Some(on_progress), include_timestamps)
@@ -186,6 +262,11 @@ pub async fn transcribe_file(
             return Err("Motor Whisper no inicializado".to_string());
         }
     };
+
+    // Adjust timestamps for speedup if needed
+    if speed > 1.01 && include_timestamps {
+        result.text = adjust_timestamps_in_text(&result.text, speed);
+    }
 
     // Guardar en historial
     let source_name = path
@@ -243,6 +324,7 @@ pub async fn transcribe_youtube(
     // Parsear opciones
     let model = parse_model(&options.model)?;
     let language = parse_language(&options.language);
+    let speed = options.speed.clamp(1.0, 2.0); // Limit to safe range
 
     // Verificar que el modelo está descargado
     if !is_model_downloaded(&model) {
@@ -282,6 +364,33 @@ pub async fn transcribe_youtube(
     let audio_path = download_result.audio_path.clone();
     let video_title = download_result.title.clone();
 
+    // Apply speedup if needed
+    let mut speedup_path: Option<std::path::PathBuf> = None;
+    let decode_path = if speed > 1.01 {
+        let _ = app.emit(
+            "transcription-progress",
+            serde_json::json!({
+                "type": "progress",
+                "progress": 0.15,
+                "message": format!("Accelerating audio to {}x...", speed)
+            }),
+        );
+
+        let path_for_speedup = audio_path.clone();
+        let speed_factor = speed;
+        let sped_up_path = tokio::task::spawn_blocking(move || {
+            apply_audio_speedup(&path_for_speedup, speed_factor)
+        })
+        .await
+        .map_err(|e| format!("Task error: {}", e))?
+        .map_err(|e| e.to_string())?;
+
+        speedup_path = Some(sped_up_path.clone());
+        sped_up_path
+    } else {
+        audio_path.clone()
+    };
+
     // Decode audio
     let _ = app.emit(
         "transcription-progress",
@@ -292,13 +401,23 @@ pub async fn transcribe_youtube(
         }),
     );
 
-    let audio_path_clone = audio_path.clone();
-    let (samples, audio_info) = tokio::task::spawn_blocking(move || {
-        decode_audio_to_whisper_format(&audio_path_clone)
+    let (samples, mut audio_info) = tokio::task::spawn_blocking(move || {
+        decode_audio_to_whisper_format(&decode_path)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
     .map_err(|e| e.to_string())?;
+
+    // Adjust audio_info duration for speedup (show original duration)
+    if speed > 1.01 {
+        audio_info.duration *= speed as f64;
+        audio_info.duration_str = crate::models::AudioInfo::format_duration(audio_info.duration);
+    }
+
+    // Clean up speedup temp file
+    if let Some(ref temp_path) = speedup_path {
+        cleanup_speedup_file(temp_path);
+    }
 
     // Create/get Whisper engine
     let _ = app.emit(
@@ -327,7 +446,7 @@ pub async fn transcribe_youtube(
     });
 
     let include_timestamps = options.include_timestamps;
-    let result = {
+    let mut result = {
         let guard = state.current_engine.lock().map_err(|e| e.to_string())?;
         if let Some((_, engine)) = guard.as_ref() {
             engine.transcribe_with_timestamps(&samples, &language, Some(audio_info), Some(on_progress), include_timestamps)
@@ -338,6 +457,11 @@ pub async fn transcribe_youtube(
             return Err("Whisper engine not initialized".to_string());
         }
     };
+
+    // Adjust timestamps for speedup if needed
+    if speed > 1.01 && include_timestamps {
+        result.text = adjust_timestamps_in_text(&result.text, speed);
+    }
 
     // Save to history
     let entry = TranscriptionEntry::new(

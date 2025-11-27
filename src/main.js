@@ -36,7 +36,8 @@ const STORAGE_KEY = 'audioink_settings';
 const defaultSettings = {
     preferredModel: 'base',
     preferredLanguage: 'auto',
-    includeTimestamps: false
+    includeTimestamps: false,
+    audioSpeed: 1.0
 };
 
 function loadSettings() {
@@ -80,7 +81,37 @@ function applySettings() {
     elements.modelSelect.value = settings.preferredModel;
     elements.languageSelect.value = settings.preferredLanguage;
     elements.includeTimestamps.checked = settings.includeTimestamps;
+    if (elements.speedSelect) {
+        elements.speedSelect.value = settings.audioSpeed.toString();
+    }
     updateModelIndicator();
+    syncTimestampsWithSpeed();
+}
+
+// Sync timestamps checkbox state based on speed selection
+function syncTimestampsWithSpeed() {
+    if (!elements.speedSelect || !elements.includeTimestamps) return;
+
+    const speed = parseFloat(elements.speedSelect.value);
+    const isSpeedUp = speed > 1.0;
+
+    if (isSpeedUp) {
+        // Disable timestamps when using speedup
+        elements.includeTimestamps.disabled = true;
+        elements.includeTimestamps.checked = false;
+        elements.timestampsLabel?.classList.add('disabled');
+        elements.timestampsWarning?.classList.remove('hidden');
+
+        // Also update saved settings
+        const settings = loadSettings();
+        settings.includeTimestamps = false;
+        saveSettings(settings);
+    } else {
+        // Enable timestamps at normal speed
+        elements.includeTimestamps.disabled = false;
+        elements.timestampsLabel?.classList.remove('disabled');
+        elements.timestampsWarning?.classList.add('hidden');
+    }
 }
 
 function initElements() {
@@ -120,6 +151,9 @@ function initElements() {
     elements.downloadProgressText = document.getElementById('download-progress-text');
     elements.downloadedModelsList = document.getElementById('downloaded-models-list');
     elements.includeTimestamps = document.getElementById('include-timestamps');
+    elements.timestampsLabel = document.getElementById('timestamps-label');
+    elements.timestampsWarning = document.getElementById('timestamps-warning');
+    elements.speedSelect = document.getElementById('speed-select');
 
     // Model indicator (header)
     elements.modelIndicator = document.getElementById('model-indicator');
@@ -199,6 +233,16 @@ function initEventListeners() {
         settings.includeTimestamps = elements.includeTimestamps.checked;
         saveSettings(settings);
     });
+
+    // Speed select (save on change and sync timestamps)
+    if (elements.speedSelect) {
+        elements.speedSelect.addEventListener('change', () => {
+            const settings = loadSettings();
+            settings.audioSpeed = parseFloat(elements.speedSelect.value);
+            saveSettings(settings);
+            syncTimestampsWithSpeed();
+        });
+    }
 
     // Transcribe
     elements.transcribeBtn.addEventListener('click', transcribe);
@@ -606,7 +650,8 @@ async function transcribe() {
                     options: {
                         model: elements.modelSelect.value,
                         language: elements.languageSelect.value,
-                        include_timestamps: elements.includeTimestamps.checked
+                        include_timestamps: elements.includeTimestamps.checked,
+                        speed: parseFloat(elements.speedSelect?.value || '1.0')
                     }
                 });
             }
@@ -617,7 +662,8 @@ async function transcribe() {
                 options: {
                     model: elements.modelSelect.value,
                     language: elements.languageSelect.value,
-                    include_timestamps: elements.includeTimestamps.checked
+                    include_timestamps: elements.includeTimestamps.checked,
+                    speed: parseFloat(elements.speedSelect?.value || '1.0')
                 }
             });
         } else {

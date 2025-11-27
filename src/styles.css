@@ -873,6 +873,23 @@ body {
     line-height: 1.5;
 }
 
+.setting-warning {
+    font-size: 0.8rem;
+    color: var(--warning);
+    margin-top: -0.5rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+
+.toggle-label.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-label.disabled input {
+    cursor: not-allowed;
+}
+
 .settings-content .model-selector {
     margin-bottom: 0.5rem;
 }

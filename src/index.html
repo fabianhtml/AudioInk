@@ -207,11 +207,25 @@
                 <!-- Output Options -->
                 <div class="setting-section">
                     <h3>Output Format</h3>
-                    <label class="toggle-label">
+                    <label class="toggle-label" id="timestamps-label">
                         <input type="checkbox" id="include-timestamps">
                         <span class="toggle-text">Include timestamps</span>
                     </label>
-                    <p class="setting-desc">Add time markers to transcriptions (e.g., [00:01:23] Hello world...)</p>
+                    <p class="setting-desc" id="timestamps-desc">Add time markers to transcriptions (e.g., [00:01:23] Hello world...)</p>
+                    <p class="setting-warning hidden" id="timestamps-warning">Not available with audio speedup. Set speed to 1.0x to enable.</p>
+                </div>
+
+                <!-- Speed Options -->
+                <div class="setting-section">
+                    <h3>Processing Speed</h3>
+                    <p class="setting-desc">Speed up audio before transcription. Faster processing but may reduce accuracy.</p>
+                    <select id="speed-select" class="select">
+                        <option value="1.0">1.0x (Normal)</option>
+                        <option value="1.25">1.25x (Faster)</option>
+                        <option value="1.5">1.5x (Recommended)</option>
+                        <option value="2.0">2.0x (Fastest)</option>
+                    </select>
+                    <p class="setting-desc" id="speed-note">Requires ffmpeg installed.</p>
                 </div>
             </div>
         </div>
