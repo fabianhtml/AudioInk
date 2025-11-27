@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AudioInk",
+  "version": "1.0.0",
+  "identifier": "com.audioink.app",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "AudioInk",
+        "width": 900,
+        "height": 700,
+        "minWidth": 600,
+        "minHeight": 500,
+        "resizable": true,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "shortDescription": "Local audio transcription with Whisper",
+    "longDescription": "AudioInk is a desktop application for transcribing audio and video files using OpenAI's Whisper model. All processing is done locally on your device, ensuring privacy.",
+    "copyright": "Copyright (c) 2024 Fabian HTML",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "frameworks": [],
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    }
+  }
+}

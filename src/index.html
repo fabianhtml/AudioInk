@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioInk</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="/main.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>AudioInk</h1>
+                    <p class="subtitle">Local audio transcription with Whisper</p>
+                </div>
+                <button id="settings-btn" class="btn-settings" title="Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
+            <!-- Model indicator (shown in main view) -->
+            <div id="model-indicator" class="model-indicator">
+                <span id="current-model-name">base</span>
+                <span id="current-model-status" class="status-dot"></span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="file">File</button>
+                <button class="tab" data-tab="youtube">YouTube</button>
+            </div>
+
+            <!-- File Tab -->
+            <div class="tab-content active" id="file-tab">
+                <!-- File selection state -->
+                <div id="file-drop-zone" class="upload-area">
+                    <div class="upload-icon">🎵</div>
+                    <p>Click to select your audio/video file</p>
+                    <p class="supported-formats">MP3, WAV, M4A, FLAC, OGG, MP4, MOV, MKV</p>
+                </div>
+                <!-- File selected state -->
+                <div id="file-selected" class="file-info hidden">
+                    <div class="file-details">
+                        <span id="file-name" class="file-name"></span>
+                    </div>
+                    <button class="btn-icon" id="clear-file" title="Remove file">✕</button>
+                </div>
+            </div>
+
+            <!-- YouTube Tab -->
+            <div class="tab-content" id="youtube-tab">
+                <!-- YouTube input state -->
+                <div id="youtube-input-section">
+                    <div class="youtube-input">
+                        <input type="text" id="youtube-url" placeholder="Paste YouTube URL here..." class="input-url">
+                        <button id="load-youtube-btn" class="btn-load">Check</button>
+                    </div>
+                    <p class="youtube-hint">Paste a YouTube video URL to check for available transcriptions</p>
+                </div>
+
+                <!-- YouTube Options (shown after checking) -->
+                <div id="youtube-options" class="youtube-options hidden">
+                    <div class="youtube-video-info">
+                        <span id="youtube-video-title" class="video-title"></span>
+                    </div>
+                    <div class="transcription-options">
+                        <button id="use-youtube-captions" class="btn-option">
+                            <span class="option-title">Use YouTube Captions</span>
+                            <span class="option-desc">Fast, uses existing auto-generated or manual captions</span>
+                        </button>
+                        <button id="use-whisper" class="btn-option">
+                            <span class="option-title">Transcribe with Whisper</span>
+                            <span class="option-desc">More accurate, processes audio locally</span>
+                        </button>
+                    </div>
+                    <p id="captions-status" class="captions-status"></p>
+                </div>
+
+                <!-- YouTube selected state -->
+                <div id="youtube-selected" class="file-info hidden">
+                    <div class="file-details">
+                        <span id="youtube-selected-name" class="file-name"></span>
+                        <span id="youtube-selected-method" class="file-method"></span>
+                    </div>
+                    <button class="btn-icon" id="clear-youtube" title="Change video">✕</button>
+                </div>
+            </div>
+
+            <!-- Language Selection (only for Whisper transcription) -->
+            <div id="language-selector" class="language-selector">
+                <label for="language-select">Language</label>
+                <select id="language-select" class="select">
+                    <option value="auto" selected>Auto-detect</option>
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                    <option value="pt">Português</option>
+                    <option value="ja">日本語</option>
+                    <option value="zh">中文</option>
+                </select>
+            </div>
+
+            <!-- Transcribe Button -->
+            <button id="transcribe-btn" class="btn-primary" disabled>
+                <span class="btn-text">Transcribe</span>
+                <span class="btn-loading hidden">
+                    <span class="spinner"></span>
+                    Processing...
+                </span>
+            </button>
+
+            <!-- Transcription Progress -->
+            <div id="progress-container" class="progress-container hidden">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Starting...</p>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="results hidden">
+                <div class="results-header">
+                    <h2>Transcription</h2>
+                    <div class="results-actions">
+                        <button class="btn-action" id="copy-btn">Copy</button>
+                        <button class="btn-action" id="download-btn">Save</button>
+                    </div>
+                </div>
+                <div class="results-meta">
+                    <span id="result-duration"></span>
+                    <span id="result-words"></span>
+                    <span id="result-time"></span>
+                    <span id="result-language"></span>
+                </div>
+                <textarea id="transcription-text" class="transcription-textarea" readonly></textarea>
+            </div>
+
+            <!-- History -->
+            <div class="history-section">
+                <div class="history-header">
+                    <h3>History</h3>
+                    <button id="clear-history" class="btn-text-only" title="Clear all">Clear</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <p class="history-empty">No transcriptions yet</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>100% local processing - your data never leaves your device</p>
+        </footer>
+    </div>
+
+    <!-- Settings Overlay -->
+    <div id="settings-overlay" class="settings-overlay hidden">
+        <div class="settings-modal">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button id="close-settings" class="btn-close">&times;</button>
+            </div>
+            <div class="settings-content">
+                <!-- Model Selection -->
+                <div class="setting-section">
+                    <h3>Whisper Model</h3>
+                    <p class="setting-desc">Choose a model based on your needs. Larger models are more accurate but slower.</p>
+                    <div class="model-selector">
+                        <select id="model-select" class="select">
+                            <option value="tiny">Tiny (75 MB) - Fastest</option>
+                            <option value="base">Base (142 MB) - Balanced</option>
+                            <option value="small">Small (466 MB) - Good</option>
+                            <option value="medium">Medium (1.5 GB) - Better</option>
+                            <option value="large-v3-turbo">Turbo (809 MB) - Best</option>
+                        </select>
+                        <button id="download-model-btn" class="btn-download hidden">
+                            Download
+                        </button>
+                    </div>
+                    <div id="model-status" class="model-status"></div>
+                    <!-- Inline download progress -->
+                    <div id="download-progress" class="download-progress hidden">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="download-progress-fill"></div>
+                        </div>
+                        <span class="progress-text" id="download-progress-text">Downloading...</span>
+                    </div>
+                </div>
+
+                <!-- Downloaded Models -->
+                <div class="setting-section">
+                    <h3>Downloaded Models</h3>
+                    <div id="downloaded-models-list" class="downloaded-models">
+                        <p class="loading">Loading...</p>
+                    </div>
+                </div>
+
+                <!-- Output Options -->
+                <div class="setting-section">
+                    <h3>Output Format</h3>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="include-timestamps">
+                        <span class="toggle-text">Include timestamps</span>
+                    </label>
+                    <p class="setting-desc">Add time markers to transcriptions (e.g., [00:01:23] Hello world...)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

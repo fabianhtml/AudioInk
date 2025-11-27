@@ -1,0 +1,62 @@
+[package]
+name = "audioink-rs"
+version = "0.1.0"
+description = "Local audio transcription with Whisper"
+authors = ["Fabian HTML"]
+edition = "2021"
+
+[lib]
+name = "audioink_rs_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# Whisper - transcripción local
+whisper-rs = "0.12"
+
+# Audio processing
+symphonia = { version = "0.5", default-features = false, features = [
+    "mp3", "aac", "alac", "flac", "ogg", "vorbis", "wav", "pcm", "isomp4", "mkv"
+] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+regex = "1"
+tempfile = "3"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+anyhow = "1"
+uuid = { version = "1", features = ["v4"] }
+directories = "5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP for downloading models
+reqwest = { version = "0.12", features = ["stream", "cookies", "json"] }
+futures-util = "0.3"
+indicatif = "0.17"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
