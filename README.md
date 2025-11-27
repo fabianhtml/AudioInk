@@ -7,7 +7,9 @@ Local audio transcription application powered by OpenAI's Whisper model. Built w
 - **Local Processing**: All transcription happens on your device - your data never leaves your computer
 - **Multiple Whisper Models**: Choose from Tiny, Base, Small, Medium, or Large-v3-Turbo based on your needs
 - **Audio/Video Support**: Transcribe MP3, WAV, M4A, FLAC, OGG, MP4, MOV, MKV files
-- **YouTube Captions**: Fetch captions directly from YouTube videos (auto-generated or manual)
+- **YouTube Integration**: Fetch captions or transcribe with Whisper using yt-dlp
+- **Audio Speedup**: Optional 1.25x-2.0x acceleration for faster transcription (requires ffmpeg)
+- **Progressive Display**: See transcription results in real-time as chunks complete
 - **Multi-language**: Auto-detect or specify the audio language (English, Spanish, French, German, Portuguese, Japanese, Chinese, and more)
 - **Timestamps**: Optional timestamp markers in transcriptions `[HH:MM:SS]`
 - **History**: Automatically saves transcriptions with metadata
@@ -17,6 +19,11 @@ Local audio transcription application powered by OpenAI's Whisper model. Built w
 
 - macOS 10.15+ (Apple Silicon or Intel)
 - ~150MB - 1.5GB disk space (depending on chosen Whisper model)
+
+### Optional Dependencies
+
+- **yt-dlp**: Required for YouTube Whisper transcription (`brew install yt-dlp`)
+- **ffmpeg**: Required for audio speedup feature (`brew install ffmpeg`)
 
 ## Installation
 
@@ -64,6 +71,7 @@ npm run tauri dev
 3. **Options**:
    - Select language or use auto-detect
    - Enable timestamps in Settings for time-marked output
+   - Enable audio speedup (1.25x-2.0x) for faster processing (note: not compatible with timestamps)
 
 4. **Export**: Copy to clipboard or save as text file
 
