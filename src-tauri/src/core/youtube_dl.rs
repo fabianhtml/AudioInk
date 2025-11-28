@@ -1,4 +1,4 @@
-use crate::utils::{AudioInkError, AudioInkResult};
+use crate::utils::{get_ytdlp_install_instructions, AudioInkError, AudioInkResult};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -21,7 +21,7 @@ pub fn is_ytdlp_available() -> bool {
 pub fn download_youtube_audio(url: &str) -> AudioInkResult<YouTubeDownloadResult> {
     if !is_ytdlp_available() {
         return Err(AudioInkError::Internal(
-            "yt-dlp is not installed. Please install it with: brew install yt-dlp".to_string()
+            get_ytdlp_install_instructions().to_string()
         ));
     }
 

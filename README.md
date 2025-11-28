@@ -17,25 +17,60 @@ Local audio transcription application powered by OpenAI's Whisper model. Built w
 
 ## Requirements
 
+### macOS
 - macOS 10.15+ (Apple Silicon or Intel)
+- ~150MB - 1.5GB disk space (depending on chosen Whisper model)
+
+### Linux
+- Ubuntu 20.04+, Fedora 36+, or equivalent
+- ~150MB - 1.5GB disk space (depending on chosen Whisper model)
+- Build dependencies: `build-essential`, `cmake`, `libwebkit2gtk-4.1-dev`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`
+
+### Windows
+- Windows 10/11
 - ~150MB - 1.5GB disk space (depending on chosen Whisper model)
 
 ### Optional Dependencies
 
-- **yt-dlp**: Required for YouTube Whisper transcription (`brew install yt-dlp`)
-- **ffmpeg**: Required for audio speedup feature (`brew install ffmpeg`)
+| Tool | macOS | Linux | Windows |
+|------|-------|-------|---------|
+| **yt-dlp** (YouTube transcription) | `brew install yt-dlp` | `sudo apt install yt-dlp` | `winget install yt-dlp` |
+| **ffmpeg** (audio speedup) | `brew install ffmpeg` | `sudo apt install ffmpeg` | `winget install ffmpeg` |
 
 ## Installation
 
 ### From Source
 
 1. Install prerequisites:
+
+   **macOS:**
    ```bash
    # Install Rust
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
    # Install Node.js (v18+)
    brew install node
+   ```
+
+   **Linux (Ubuntu/Debian):**
+   ```bash
+   # Install Rust
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+   # Install system dependencies
+   sudo apt update
+   sudo apt install -y build-essential cmake libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+   # Install Node.js (v18+)
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+   **Windows:**
+   ```powershell
+   # Install Rust from https://rustup.rs
+   # Install Node.js from https://nodejs.org
+   # Install Visual Studio Build Tools with C++ workload
    ```
 
 2. Clone and build:
@@ -47,6 +82,9 @@ Local audio transcription application powered by OpenAI's Whisper model. Built w
    ```
 
 3. The app will be available in `src-tauri/target/release/bundle/`
+   - **macOS:** `.dmg` and `.app`
+   - **Linux:** `.deb`, `.rpm`, and `.AppImage`
+   - **Windows:** `.msi` and `.exe`
 
 ### Development
 

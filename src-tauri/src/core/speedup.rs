@@ -3,7 +3,7 @@
 //! This module provides functions to accelerate audio files using ffmpeg's atempo filter.
 //! Maximum recommended speed is 2.0x to maintain transcription quality.
 
-use crate::utils::{AudioInkError, AudioInkResult};
+use crate::utils::{get_ffmpeg_install_instructions, AudioInkError, AudioInkResult};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -44,7 +44,7 @@ pub fn apply_audio_speedup(input_path: &Path, speed: f32) -> AudioInkResult<Path
     // Check ffmpeg availability
     if !is_ffmpeg_available() {
         return Err(AudioInkError::Internal(
-            "ffmpeg is not installed. Please install it with: brew install ffmpeg".to_string()
+            get_ffmpeg_install_instructions().to_string()
         ));
     }
 

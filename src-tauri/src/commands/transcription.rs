@@ -1,7 +1,7 @@
 use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available, apply_audio_speedup, cleanup_speedup_file};
 use crate::models::{Language, SourceType, TranscriptionEntry, TranscriptionResult, WhisperModel};
 use crate::persistence::HistoryManager;
-use crate::utils::AudioInkError;
+use crate::utils::{get_ytdlp_install_instructions, AudioInkError};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
@@ -318,7 +318,7 @@ pub async fn transcribe_youtube(
 ) -> Result<TranscriptionResult, String> {
     // Check if yt-dlp is available
     if !is_ytdlp_available() {
-        return Err("yt-dlp is not installed. Please install it with: brew install yt-dlp".to_string());
+        return Err(get_ytdlp_install_instructions().to_string());
     }
 
     // Parsear opciones
