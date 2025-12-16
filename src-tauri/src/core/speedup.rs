@@ -1,19 +1,41 @@
-//! Audio speedup functionality using ffmpeg
+//! Audio processing functionality using ffmpeg
 //!
-//! This module provides functions to accelerate audio files using ffmpeg's atempo filter.
+//! This module provides functions to:
+//! - Accelerate audio files using ffmpeg's atempo filter
+//! - Extract audio from video files (mp4, avi, mov)
 //! Maximum recommended speed is 2.0x to maintain transcription quality.
 
+use crate::models::VIDEO_FORMATS;
 use crate::utils::{get_ffmpeg_install_instructions, AudioInkError, AudioInkResult};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Common paths where ffmpeg might be installed
+const FFMPEG_PATHS: &[&str] = &[
+    "ffmpeg",
+    "/opt/homebrew/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/usr/bin/ffmpeg",
+];
+
+/// Find the ffmpeg binary path
+fn find_ffmpeg() -> Option<&'static str> {
+    for path in FFMPEG_PATHS {
+        if Command::new(path)
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
 /// Check if ffmpeg is available in the system
 pub fn is_ffmpeg_available() -> bool {
-    Command::new("ffmpeg")
-        .arg("-version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    find_ffmpeg().is_some()
 }
 
 /// Apply audio speedup using ffmpeg's atempo filter
@@ -42,11 +64,9 @@ pub fn apply_audio_speedup(input_path: &Path, speed: f32) -> AudioInkResult<Path
     }
 
     // Check ffmpeg availability
-    if !is_ffmpeg_available() {
-        return Err(AudioInkError::Internal(
-            get_ffmpeg_install_instructions().to_string()
-        ));
-    }
+    let ffmpeg = find_ffmpeg().ok_or_else(|| {
+        AudioInkError::Internal(get_ffmpeg_install_instructions().to_string())
+    })?;
 
     // Create output path in temp directory
     let temp_dir = std::env::temp_dir();
@@ -56,7 +76,7 @@ pub fn apply_audio_speedup(input_path: &Path, speed: f32) -> AudioInkResult<Path
 
     // Build ffmpeg command
     // ffmpeg -i input.wav -filter:a "atempo=1.5" -vn output.wav
-    let output = Command::new("ffmpeg")
+    let output = Command::new(ffmpeg)
         .arg("-i")
         .arg(input_path)
         .arg("-filter:a")
@@ -91,6 +111,72 @@ pub fn cleanup_speedup_file(path: &Path) {
 /// to represent the original audio time
 pub fn adjust_timestamp_for_speed(timestamp_ms: i64, speed: f32) -> i64 {
     ((timestamp_ms as f64) * (speed as f64)).round() as i64
+}
+
+/// Check if a file is a video format that needs audio extraction
+pub fn is_video_format(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| VIDEO_FORMATS.contains(&ext.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+/// Extract audio from a video file using ffmpeg
+///
+/// # Arguments
+/// * `input_path` - Path to the input video file (mp4, avi, mov, etc.)
+///
+/// # Returns
+/// * `PathBuf` - Path to the extracted audio file (wav format)
+///
+/// # Note
+/// The caller is responsible for cleaning up the temporary file after use
+pub fn extract_audio_from_video(input_path: &Path) -> AudioInkResult<PathBuf> {
+    // Check ffmpeg availability
+    let ffmpeg = find_ffmpeg().ok_or_else(|| {
+        AudioInkError::Internal(get_ffmpeg_install_instructions().to_string())
+    })?;
+
+    // Create output path in temp directory
+    let temp_dir = std::env::temp_dir();
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
+    let output_filename = format!("audioink_extracted_{}.wav", timestamp);
+    let output_path = temp_dir.join(output_filename);
+
+    // Build ffmpeg command to extract audio
+    // ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 output.wav
+    let output = Command::new(ffmpeg)
+        .arg("-i")
+        .arg(input_path)
+        .arg("-vn") // No video
+        .arg("-acodec")
+        .arg("pcm_s16le") // PCM 16-bit little-endian
+        .arg("-ar")
+        .arg("16000") // 16kHz sample rate (Whisper's requirement)
+        .arg("-ac")
+        .arg("1") // Mono
+        .arg("-y") // Overwrite output
+        .arg(&output_path)
+        .output()
+        .map_err(|e| AudioInkError::Internal(format!("Failed to run ffmpeg: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AudioInkError::Internal(format!(
+            "ffmpeg audio extraction failed: {}",
+            stderr
+        )));
+    }
+
+    Ok(output_path)
+}
+
+/// Clean up a temporary extracted audio file
+pub fn cleanup_extracted_audio(path: &Path) {
+    // Only delete if it's in temp directory and matches our naming pattern
+    if path.to_string_lossy().contains("audioink_extracted_") {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 #[cfg(test)]

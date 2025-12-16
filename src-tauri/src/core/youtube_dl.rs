@@ -8,22 +8,39 @@ pub struct YouTubeDownloadResult {
     pub title: String,
 }
 
+/// Common paths where yt-dlp might be installed
+const YTDLP_PATHS: &[&str] = &[
+    "yt-dlp",
+    "/opt/homebrew/bin/yt-dlp",
+    "/usr/local/bin/yt-dlp",
+    "/usr/bin/yt-dlp",
+];
+
+/// Find the yt-dlp binary path
+fn find_ytdlp() -> Option<&'static str> {
+    for path in YTDLP_PATHS {
+        if Command::new(path)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
 /// Check if yt-dlp is available in the system
 pub fn is_ytdlp_available() -> bool {
-    Command::new("yt-dlp")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    find_ytdlp().is_some()
 }
 
 /// Download audio from YouTube video using yt-dlp
 pub fn download_youtube_audio(url: &str) -> AudioInkResult<YouTubeDownloadResult> {
-    if !is_ytdlp_available() {
-        return Err(AudioInkError::Internal(
-            get_ytdlp_install_instructions().to_string()
-        ));
-    }
+    let ytdlp = find_ytdlp().ok_or_else(|| {
+        AudioInkError::Internal(get_ytdlp_install_instructions().to_string())
+    })?;
 
     // Create temp directory for download
     let temp_dir = std::env::temp_dir().join("audioink_youtube");
@@ -32,7 +49,7 @@ pub fn download_youtube_audio(url: &str) -> AudioInkResult<YouTubeDownloadResult
     })?;
 
     // First, get the video title
-    let title_output = Command::new("yt-dlp")
+    let title_output = Command::new(ytdlp)
         .args(["--get-title", url])
         .output()
         .map_err(|e| AudioInkError::Internal(format!("Failed to get video title: {}", e)))?;
@@ -56,7 +73,7 @@ pub fn download_youtube_audio(url: &str) -> AudioInkResult<YouTubeDownloadResult
     let output_template = temp_dir.join(format!("{}.%(ext)s", safe_title));
 
     // Download audio only in best quality, convert to wav for whisper
-    let output = Command::new("yt-dlp")
+    let output = Command::new(ytdlp)
         .args([
             "-x",                           // Extract audio
             "--audio-format", "wav",        // Convert to WAV (best for whisper)

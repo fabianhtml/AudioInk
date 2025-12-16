@@ -1,4 +1,4 @@
-use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available, apply_audio_speedup, cleanup_speedup_file};
+use crate::core::{decode_audio_to_whisper_format, is_model_downloaded, WhisperEngine, download_youtube_audio, cleanup_youtube_audio, is_ytdlp_available, apply_audio_speedup, cleanup_speedup_file, is_video_format, extract_audio_from_video, cleanup_extracted_audio};
 use crate::models::{Language, SourceType, TranscriptionEntry, TranscriptionResult, WhisperModel};
 use crate::persistence::HistoryManager;
 use crate::utils::{get_ytdlp_install_instructions, AudioInkError};
@@ -169,6 +169,32 @@ pub async fn transcribe_file(
         }),
     );
 
+    // Extract audio from video if needed
+    let mut extracted_audio_path: Option<std::path::PathBuf> = None;
+    let base_audio_path = if is_video_format(&path) {
+        let _ = app.emit(
+            "transcription-progress",
+            serde_json::json!({
+                "type": "progress",
+                "progress": 0.02,
+                "message": "Extrayendo audio del video..."
+            }),
+        );
+
+        let path_for_extraction = path.clone();
+        let extracted_path = tokio::task::spawn_blocking(move || {
+            extract_audio_from_video(&path_for_extraction)
+        })
+        .await
+        .map_err(|e| format!("Error de task: {}", e))?
+        .map_err(|e| e.to_string())?;
+
+        extracted_audio_path = Some(extracted_path.clone());
+        extracted_path
+    } else {
+        path.clone()
+    };
+
     // Apply speedup if needed
     let mut speedup_path: Option<std::path::PathBuf> = None;
     let audio_path = if speed > 1.01 {
@@ -181,7 +207,7 @@ pub async fn transcribe_file(
             }),
         );
 
-        let path_for_speedup = path.clone();
+        let path_for_speedup = base_audio_path.clone();
         let speed_factor = speed;
         let sped_up_path = tokio::task::spawn_blocking(move || {
             apply_audio_speedup(&path_for_speedup, speed_factor)
@@ -193,7 +219,7 @@ pub async fn transcribe_file(
         speedup_path = Some(sped_up_path.clone());
         sped_up_path
     } else {
-        path.clone()
+        base_audio_path.clone()
     };
 
     // Decodificar audio
@@ -224,6 +250,11 @@ pub async fn transcribe_file(
     // Clean up speedup temp file
     if let Some(ref temp_path) = speedup_path {
         cleanup_speedup_file(temp_path);
+    }
+
+    // Clean up extracted audio temp file
+    if let Some(ref temp_path) = extracted_audio_path {
+        cleanup_extracted_audio(temp_path);
     }
 
     // Crear/obtener motor Whisper
