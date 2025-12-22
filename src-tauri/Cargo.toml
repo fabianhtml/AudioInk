@@ -19,8 +19,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 
-# Whisper - transcripción local
-whisper-rs = "0.12"
+# Whisper - transcripción local (metal = GPU acceleration on Apple Silicon)
+whisper-rs = { version = "0.15", features = ["metal"] }
 
 # Audio processing
 symphonia = { version = "0.5", default-features = false, features = [

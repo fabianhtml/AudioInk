@@ -179,26 +179,27 @@ impl WhisperEngine {
             .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
 
         // Extraer texto de los segmentos
-        let num_segments = state
-            .full_n_segments()
-            .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
+        let num_segments = state.full_n_segments();
 
         let mut text = String::new();
         for i in 0..num_segments {
-            let segment_text = state
-                .full_get_segment_text(i)
+            let segment = state
+                .get_segment(i)
+                .ok_or_else(|| AudioInkError::Whisper(format!("Segment {} not found", i)))?;
+
+            let segment_text = segment
+                .to_str()
                 .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
 
             if include_timestamps {
-                // Get segment start time in centiseconds (whisper uses 10ms units)
-                let t0 = state.full_get_segment_t0(i)
-                    .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
+                // Get segment start time in centiseconds (10ms units)
+                let t0 = segment.start_timestamp();
                 // Convert to milliseconds and add offset
-                let start_ms = (t0 * 10) as i64 + time_offset_ms;
+                let start_ms = (t0 * 10) + time_offset_ms;
                 let timestamp = format_timestamp_ms(start_ms);
                 text.push_str(&format!("[{}] {}\n", timestamp, segment_text.trim()));
             } else {
-                text.push_str(&segment_text);
+                text.push_str(segment_text);
             }
         }
 
@@ -232,9 +233,7 @@ impl WhisperEngine {
             .full(params, sample)
             .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
 
-        let lang_id = state
-            .full_lang_id_from_state()
-            .map_err(|e| AudioInkError::Whisper(e.to_string()))?;
+        let lang_id = state.full_lang_id_from_state();
 
         Ok(whisper_rs::get_lang_str(lang_id).unwrap_or("unknown").to_string())
     }
